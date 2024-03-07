@@ -198,8 +198,9 @@ namespace Wobble.Audio.Tracks
             get => GlobalNormalize.Value ? _normalizedVolumeFactor : 1;
             set
             {
+                var prevVolume = Volume / _normalizedVolumeFactor;
                 _normalizedVolumeFactor = value;
-                Volume = Volume;
+                Volume = prevVolume * value;
             }
         }
 
@@ -439,7 +440,7 @@ namespace Wobble.Audio.Tracks
             Frequency = Bass.ChannelGetInfo(Stream).Frequency;
             
             CalculateNormalizedVolumeFactor();
-            GlobalNormalize.ValueChanged += UpdateVolume; 
+            GlobalNormalize.ValueChanged += UpdateVolume;
 
             if (!IsPreview)
             {
@@ -451,11 +452,25 @@ namespace Wobble.Audio.Tracks
                 Bass.ChannelSetAttribute(Stream, ChannelAttribute.TempoOverlapMilliseconds, 4);
                 Bass.ChannelSetAttribute(Stream, ChannelAttribute.TempoSequenceMilliseconds, 30);
             }
+            Volume = 100 * NormalizedVolumeFactor; // TODO replace 100
         }
 
         private void UpdateVolume(object sender, BindableValueChangedEventArgs<bool> args)
         {
-            Volume = Volume;
+            // if (args.Value == args.OldValue) return;
+            // if (args.Value)
+            // {
+            //     var volume = Volume * NormalizedVolumeFactor;
+            //     Volume = volume;
+            // }
+            // else
+            // {
+            //     var volume = Volume / NormalizedVolumeFactor;
+            //     Volume = volume;
+            // }
+            // Logger.Debug($"Volume set to {Volume}%", LogType.Runtime);
+            // TODO
+            Volume = 100 * NormalizedVolumeFactor;
         }
 
         /// <summary>
@@ -474,7 +489,7 @@ namespace Wobble.Audio.Tracks
         /// </summary>
         /// <param name="to"></param>
         /// <param name="time"></param>
-        public void Fade(float to, int time) => Bass.ChannelSlideAttribute(Stream, ChannelAttribute.Volume, to / 100, time);
+        public void Fade(float to, int time) => Bass.ChannelSlideAttribute(Stream, ChannelAttribute.Volume, (float)(to / 100 * NormalizedVolumeFactor), time);
 
         /// <summary>
         ///     Fades the speed of the track to a given rate
