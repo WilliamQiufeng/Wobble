@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using ManagedBass;
 using ManagedBass.Fx;
+using Wobble.Bindables;
 using Wobble.Helpers;
 using Wobble.Logging;
 
@@ -155,6 +156,8 @@ namespace Wobble.Audio.Tracks
 
         private double _normalizedVolumeFactor = 1;
 
+        public Bindable<bool> Normalize { get; set; }
+
         public float Rate
         {
             get => _rate;
@@ -192,7 +195,7 @@ namespace Wobble.Audio.Tracks
 
         private double NormalizedVolumeFactor
         {
-            get => _normalizedVolumeFactor;
+            get => Normalize.Value ? _normalizedVolumeFactor : 1;
             set
             {
                 _normalizedVolumeFactor = value;
@@ -414,6 +417,7 @@ namespace Wobble.Audio.Tracks
             IsDisposed = true;
             Seeked = null;
             RateChanged = null;
+            Normalize.ValueChanged -= UpdateVolume;
         }
 
         /// <summary>
@@ -433,6 +437,9 @@ namespace Wobble.Audio.Tracks
 
             Length = Bass.ChannelBytes2Seconds(Stream,Bass.ChannelGetLength(Stream)) * 1000;
             Frequency = Bass.ChannelGetInfo(Stream).Frequency;
+            
+            CalculateNormalizedVolumeFactor();
+            Normalize.ValueChanged += UpdateVolume; 
 
             if (!IsPreview)
             {
@@ -444,6 +451,11 @@ namespace Wobble.Audio.Tracks
                 Bass.ChannelSetAttribute(Stream, ChannelAttribute.TempoOverlapMilliseconds, 4);
                 Bass.ChannelSetAttribute(Stream, ChannelAttribute.TempoSequenceMilliseconds, 30);
             }
+        }
+
+        private void UpdateVolume(object sender, BindableValueChangedEventArgs<bool> args)
+        {
+            Volume = Volume;
         }
 
         /// <summary>
@@ -484,7 +496,7 @@ namespace Wobble.Audio.Tracks
             }
         }
 
-        public void Normalize(float targetDb = -8)
+        public void CalculateNormalizedVolumeFactor(float targetDb = -8)
         {
             var previousPosition = Bass.ChannelGetPosition(Stream);
             float maxLevel = 0;
