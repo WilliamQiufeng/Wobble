@@ -156,7 +156,7 @@ namespace Wobble.Audio.Tracks
 
         private double _normalizedVolumeFactor = 1;
 
-        public Bindable<bool> Normalize { get; set; }
+        public static Bindable<bool> GlobalNormalize { get; set; }
 
         public float Rate
         {
@@ -195,7 +195,7 @@ namespace Wobble.Audio.Tracks
 
         private double NormalizedVolumeFactor
         {
-            get => Normalize.Value ? _normalizedVolumeFactor : 1;
+            get => GlobalNormalize.Value ? _normalizedVolumeFactor : 1;
             set
             {
                 _normalizedVolumeFactor = value;
@@ -417,7 +417,7 @@ namespace Wobble.Audio.Tracks
             IsDisposed = true;
             Seeked = null;
             RateChanged = null;
-            Normalize.ValueChanged -= UpdateVolume;
+            GlobalNormalize.ValueChanged -= UpdateVolume;
         }
 
         /// <summary>
@@ -439,7 +439,7 @@ namespace Wobble.Audio.Tracks
             Frequency = Bass.ChannelGetInfo(Stream).Frequency;
             
             CalculateNormalizedVolumeFactor();
-            Normalize.ValueChanged += UpdateVolume; 
+            GlobalNormalize.ValueChanged += UpdateVolume; 
 
             if (!IsPreview)
             {
