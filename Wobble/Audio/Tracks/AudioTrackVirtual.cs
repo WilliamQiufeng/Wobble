@@ -196,6 +196,11 @@ namespace Wobble.Audio.Tracks
                 throw new AudioEngineException("CAnnot seek below 0 or above the track's length");
         }
 
+        public void Normalize(float targetDb = -8)
+        {
+            
+        }
+
         /// <inheritdoc />
         /// <summary>
         /// </summary>

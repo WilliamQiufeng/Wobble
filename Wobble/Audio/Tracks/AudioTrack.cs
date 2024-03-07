@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using ManagedBass;
 using ManagedBass.Fx;
 using Wobble.Helpers;
@@ -151,6 +152,9 @@ namespace Wobble.Audio.Tracks
         ///     The rate at which the audio plays at.
         /// </summary>
         private float _rate = 1.0f;
+
+        private double _normalizedVolumeFactor = 1;
+
         public float Rate
         {
             get => _rate;
@@ -182,8 +186,18 @@ namespace Wobble.Audio.Tracks
         /// </summary>
         public double Volume
         {
-            get => Bass.ChannelGetAttribute(Stream, ChannelAttribute.Volume) * 100;
-            set => Bass.ChannelSetAttribute(Stream, ChannelAttribute.Volume, (float)(value / 100f));
+            get => Bass.ChannelGetAttribute(Stream, ChannelAttribute.Volume) * 100 / NormalizedVolumeFactor;
+            set => Bass.ChannelSetAttribute(Stream, ChannelAttribute.Volume, (float)(value / 100f * NormalizedVolumeFactor));
+        }
+
+        private double NormalizedVolumeFactor
+        {
+            get => _normalizedVolumeFactor;
+            set
+            {
+                _normalizedVolumeFactor = value;
+                Volume = Volume;
+            }
         }
 
         /// <summary>
@@ -468,6 +482,35 @@ namespace Wobble.Audio.Tracks
                 Bass.ChannelSetAttribute(Stream, ChannelAttribute.Frequency, Frequency);
                 Bass.ChannelSlideAttribute(Stream, ChannelAttribute.Tempo, rate * 100 - 100, time);
             }
+        }
+
+        public void Normalize(float targetDb = -8)
+        {
+            var previousPosition = Bass.ChannelGetPosition(Stream);
+            float maxLevel = 0;
+            const int amplitudeSampleSize = 44000;
+            const int sampleRounds = 50;
+            var data = new float[amplitudeSampleSize];
+            var channelByteCount = Bass.ChannelSeconds2Bytes(Stream, Length / 1000);
+            var sampleRoundSeparation = channelByteCount / sampleRounds;
+            // Finding r.m.s. value of the amplitude
+            for (var i = 0; i < sampleRounds; i ++)
+            {
+                var samplePosition = sampleRoundSeparation * i;
+                Bass.ChannelSetPosition(Stream, samplePosition);
+                if (Bass.ChannelGetData(Stream, data, (amplitudeSampleSize * sizeof(float)) | (int)DataFlags.Float) < 0) continue;
+                maxLevel = MathF.Max(maxLevel, data.Select(x => x * x).Average());
+            }
+
+            maxLevel = MathF.Sqrt(maxLevel);
+            var maxLevelDb = 20 * MathF.Log10(maxLevel);
+            
+
+            NormalizedVolumeFactor = MathF.Pow(10, (targetDb - maxLevelDb) / 20);
+            
+            Logger.Debug($"RMS level {maxLevel} ({maxLevelDb} dB) sampled, adjustment factor {NormalizedVolumeFactor}", LogType.Runtime);
+            
+            Bass.ChannelSetPosition(Stream, previousPosition);
         }
     }
 }

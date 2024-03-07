@@ -99,5 +99,7 @@ namespace Wobble.Audio.Tracks
         void Fade(float to, int time);
 
         void FadeSpeed(float rate, int time);
+
+        void Normalize(float targetDb = -8);
     }
 }
