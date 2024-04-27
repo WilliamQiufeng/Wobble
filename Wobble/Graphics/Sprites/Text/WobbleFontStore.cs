@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
+using FontStashSharp;
 using Microsoft.Xna.Framework.Graphics;
-using SpriteFontPlus;
 
 namespace Wobble.Graphics.Sprites.Text
 {
     public class WobbleFontStore
     {
+        public FontSystem FontSystem { get; }
         /// <summary>
         ///     All of the contained fonts at different sizes
         /// </summary>
-        public DynamicSpriteFont Store { get; }
+        public DynamicSpriteFont Store { get; set; }
 
         /// <summary>
         ///     The size the font was initially created ad
@@ -24,14 +25,22 @@ namespace Wobble.Graphics.Sprites.Text
         /// <param name="addedFonts"></param>
         public WobbleFontStore(int size, byte[] font, Dictionary<string, byte[]> addedFonts = null)
         {
+            FontSystem = new FontSystem();
+            FontSystem.AddFont(font);
             DefaultSize = size;
-            Store = DynamicSpriteFont.FromTtf(font, size);
 
             if (addedFonts == null)
                 return;
 
             foreach (var f in addedFonts)
                 AddFont(f.Key, f.Value);
+            Store = FontSystem.GetFont(size);
+        }
+
+        public float FontSize
+        {
+            get => Store.FontSize;
+            set => Store = FontSystem.GetFont(value);
         }
 
         /// <summary>
@@ -39,6 +48,6 @@ namespace Wobble.Graphics.Sprites.Text
         /// </summary>
         /// <param name="name"></param>
         /// <param name="font"></param>
-        public void AddFont(string name, byte[] font) => Store.AddTtf(name, font);
+        public void AddFont(string name, byte[] font) => FontSystem.AddFont(font);
     }
 }
