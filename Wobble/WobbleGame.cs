@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -91,6 +92,8 @@ namespace Wobble
         /// <summary>
         /// </summary>
         public List<Action> ScheduledRenderTargetDraws { get; } = new List<Action>();
+
+        private ConcurrentQueue<Drawable> ScheduledRectanglesRecalculationDrawables { get; } = new ConcurrentQueue<Drawable>();
 
         /// <summary>
         ///     The sprite used for clearing the alpha channel. Its alpha must be 1 (fully opaque) and its color does not matter.
@@ -256,6 +259,17 @@ namespace Wobble
             base.Update(gameTime);
         }
 
+        public void ScheduleRectangleRecalculation(Drawable drawable)
+        {
+            ScheduledRectanglesRecalculationDrawables.Enqueue(drawable);
+        }
+
+        protected void RecalculateRectangles()
+        {
+            while (ScheduledRectanglesRecalculationDrawables.TryDequeue(out var drawable))
+                drawable.RecalculateRectangles();
+        }
+
         /// <summary>
         ///     This is called when the game should draw itself.
         /// </summary>
@@ -271,6 +285,8 @@ namespace Wobble
                 ScheduledRenderTargetDraws.Remove(ScheduledRenderTargetDraws[i]);
             }
 
+
+            RecalculateRectangles();
             base.Draw(gameTime);
 
             // Draw the current game screen.

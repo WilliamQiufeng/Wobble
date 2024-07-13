@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 using MonoGame.Extended;
 using Wobble.Graphics.Animations;
@@ -27,6 +28,11 @@ namespace Wobble.Graphics
         ///     The order of which this object was drawn. Higher means the object was drawn later.
         /// </summary>
         public int DrawOrder { get; set; }
+
+        private bool _isRectangleRecalculationScheduled;
+        private bool _isWithinRectangleRecalculation;
+
+        public bool UseScheduledRectangleRecalculation { get; set; } = false;
 
         /// <summary>
         ///     The parent of this drawable in which it depends on for its position and size.
@@ -56,7 +62,7 @@ namespace Wobble.Graphics
                 }
 
                 _parent = value;
-                RecalculateRectangles();
+                ScheduleRectanglesRecalculation();
             }
         }
 
@@ -91,7 +97,7 @@ namespace Wobble.Graphics
             set
             {
                 _position = value;
-                RecalculateRectangles();
+                ScheduleRectanglesRecalculation();
             }
         }
 
@@ -108,7 +114,7 @@ namespace Wobble.Graphics
                 var height = MathHelper.Clamp(value.Y.Value, 0, int.MaxValue);
 
                 _size = new ScalableVector2(width, height, value.X.Scale, value.Y.Scale);
-                RecalculateRectangles();
+                ScheduleRectanglesRecalculation();
             }
         }
 
@@ -204,7 +210,7 @@ namespace Wobble.Graphics
             set
             {
                 Size = new ScalableVector2(Size.X.Value, Size.Y.Value, Size.X.Scale, value);
-                RecalculateRectangles();
+                ScheduleRectanglesRecalculation();
             }
         }
 
@@ -218,7 +224,7 @@ namespace Wobble.Graphics
             set
             {
                 _alignment = value;
-                RecalculateRectangles();
+                ScheduleRectanglesRecalculation();
             }
         }
 
@@ -457,12 +463,40 @@ namespace Wobble.Graphics
         /// </summary>
         public virtual void Dispose() => IsDisposed = true;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ScheduleRectanglesRecalculation()
+        {
+            if (!UseScheduledRectangleRecalculation)
+            {
+                RecalculateRectangles();
+                return;
+            }
+            if (_isRectangleRecalculationScheduled)
+                return;
+            _isRectangleRecalculationScheduled = true;
+            GameBase.Game.ScheduleRectangleRecalculation(this);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ForceRecalculateRectangles()
+        {
+            _isRectangleRecalculationScheduled = true;
+            RecalculateRectangles();
+        }
+
         /// <summary>
         ///     Recalculates the local and global rectangles of the object. Makes sure that the position
         ///     and sizes are relative to the parent if the drawable has one.
         /// </summary>
-        protected void RecalculateRectangles()
+        internal void RecalculateRectangles()
         {
+            if (!_isRectangleRecalculationScheduled && UseScheduledRectangleRecalculation
+                                                    && !_isWithinRectangleRecalculation)
+                return;
+
+            _isRectangleRecalculationScheduled = false;
+            _isWithinRectangleRecalculation = true;
+
             // Make it relative to the parent.
             if (Parent != null)
             {
@@ -500,10 +534,11 @@ namespace Wobble.Graphics
             }
 
             for (var i = 0; i < Children.Count; i++)
-                Children[i].RecalculateRectangles();
+                Children[i].ForceRecalculateRectangles();
 
             // Raise recalculated event.
             OnRectangleRecalculated();
+            _isWithinRectangleRecalculation = false;
         }
 
         /// <summary>
