@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 using FontStashSharp.Interfaces;
 using FreeTypeSharp;
 using static FreeTypeSharp.FT;
@@ -19,13 +18,17 @@ namespace Wobble.Graphics.Sprites.Text
                 enableTabularNumbers);
         }
 
-        public IFontSource Load(byte[] data)
+        public IndexedFontSettings GetSettings(byte[] data)
         {
             IndexedFontSettings settings;
-            if (!_settings.TryGetValue(data, out settings))
-                settings = new IndexedFontSettings(0, FontWeight.Regular, 0, false);
+            return _settings.TryGetValue(data, out settings)
+                ? settings
+                : new IndexedFontSettings(0, FontWeight.Regular, 0, false);
+        }
 
-            return new FreeTypeFontSource(data, settings);
+        public IFontSource Load(byte[] data)
+        {
+            return new FreeTypeFontSource(data, GetSettings(data));
         }
     }
 
@@ -52,12 +55,9 @@ namespace Wobble.Graphics.Sprites.Text
     internal unsafe class FreeTypeFontSource : IFontSource
     {
         private const uint WeightAxisTag = 0x77676874;
-        private const uint GsubTableTag = 0x47535542;
-        private const uint TabularFiguresFeatureTag = 0x746e756d;
 
         private readonly object _lock = new object();
         private readonly int _implicitFontSizeReduction;
-        private readonly Dictionary<int, int> _tabularDigitGlyphs;
         private readonly FreeTypeLibrary _library;
         private readonly GCHandle _dataHandle;
         private readonly FT_FaceRec_* _face;
@@ -80,9 +80,6 @@ namespace Wobble.Graphics.Sprites.Text
 
             _face = face;
             SetWeight(settings.Weight);
-            _tabularDigitGlyphs = settings.EnableTabularNumbers
-                ? LoadSingleSubstitutionFeature(TabularFiguresFeatureTag)
-                : null;
             _ascent = _face->ascender;
             _descent = _face->descender;
             _height = _face->height;
@@ -109,10 +106,6 @@ namespace Wobble.Graphics.Sprites.Text
                 var glyph = FT_Get_Char_Index(_face, (UIntPtr)(uint)codepoint);
                 if (glyph == 0)
                     return null;
-
-                if (_tabularDigitGlyphs != null && codepoint >= '0' && codepoint <= '9'
-                    && _tabularDigitGlyphs.TryGetValue((int)glyph, out var tabularGlyph))
-                    return tabularGlyph;
 
                 return (int)glyph;
             }
@@ -215,224 +208,6 @@ namespace Wobble.Graphics.Sprites.Text
             }
         }
 
-        private Dictionary<int, int> LoadSingleSubstitutionFeature(uint featureTag)
-        {
-            var gsub = LoadSfntTable(GsubTableTag);
-
-            if (gsub == null || gsub.Length < 10)
-                return null;
-
-            var featureListOffset = ReadUInt16(gsub, 6);
-            var lookupListOffset = ReadUInt16(gsub, 8);
-            var lookupIndices = FindFeatureLookupIndices(gsub, featureListOffset, featureTag);
-
-            if (lookupIndices == null || lookupIndices.Count == 0)
-                return null;
-
-            var digitGlyphs = GetDigitGlyphIds();
-            var substitutions = new Dictionary<int, int>();
-
-            foreach (var lookupIndex in lookupIndices)
-                ReadSingleSubstitutionLookup(gsub, lookupListOffset, lookupIndex, digitGlyphs, substitutions);
-
-            return substitutions.Count == 0 ? null : substitutions;
-        }
-
-        private byte[] LoadSfntTable(uint tag)
-        {
-            UIntPtr length = UIntPtr.Zero;
-
-            if (FT_Load_Sfnt_Table(_face, tag, IntPtr.Zero, null, &length) != FT_Error.FT_Err_Ok
-                || length == UIntPtr.Zero)
-                return null;
-
-            var data = new byte[(int)length.ToUInt64()];
-
-            fixed (byte* buffer = data)
-            {
-                ThrowOnError(FT_Load_Sfnt_Table(_face, tag, IntPtr.Zero, buffer, &length),
-                    $"Unable to load {TagToString(tag)} font table.");
-            }
-
-            return data;
-        }
-
-        private Dictionary<int, bool> GetDigitGlyphIds()
-        {
-            var glyphs = new Dictionary<int, bool>();
-
-            for (var codepoint = '0'; codepoint <= '9'; codepoint++)
-            {
-                var glyph = FT_Get_Char_Index(_face, (UIntPtr)(uint)codepoint);
-
-                if (glyph != 0)
-                    glyphs[(int)glyph] = true;
-            }
-
-            return glyphs;
-        }
-
-        private static List<ushort> FindFeatureLookupIndices(byte[] table, int featureListOffset, uint featureTag)
-        {
-            if (!CanRead(table, featureListOffset, 2))
-                return null;
-
-            var featureCount = ReadUInt16(table, featureListOffset);
-
-            for (var i = 0; i < featureCount; i++)
-            {
-                var recordOffset = featureListOffset + 2 + i * 6;
-
-                if (!CanRead(table, recordOffset, 6) || ReadUInt32(table, recordOffset) != featureTag)
-                    continue;
-
-                var featureOffset = featureListOffset + ReadUInt16(table, recordOffset + 4);
-
-                if (!CanRead(table, featureOffset, 4))
-                    return null;
-
-                var lookupCount = ReadUInt16(table, featureOffset + 2);
-
-                if (!CanRead(table, featureOffset + 4, lookupCount * 2))
-                    return null;
-
-                var indices = new List<ushort>();
-
-                for (var j = 0; j < lookupCount; j++)
-                    indices.Add(ReadUInt16(table, featureOffset + 4 + j * 2));
-
-                return indices;
-            }
-
-            return null;
-        }
-
-        private static void ReadSingleSubstitutionLookup(byte[] table, int lookupListOffset, int lookupIndex,
-            Dictionary<int, bool> sourceGlyphs, Dictionary<int, int> substitutions)
-        {
-            if (!CanRead(table, lookupListOffset, 2))
-                return;
-
-            var lookupCount = ReadUInt16(table, lookupListOffset);
-
-            if (lookupIndex < 0 || lookupIndex >= lookupCount)
-                return;
-
-            var lookupOffsetRecord = lookupListOffset + 2 + lookupIndex * 2;
-
-            if (!CanRead(table, lookupOffsetRecord, 2))
-                return;
-
-            var lookupOffset = lookupListOffset + ReadUInt16(table, lookupOffsetRecord);
-
-            if (!CanRead(table, lookupOffset, 6) || ReadUInt16(table, lookupOffset) != 1)
-                return;
-
-            var subtableCount = ReadUInt16(table, lookupOffset + 4);
-
-            if (!CanRead(table, lookupOffset + 6, subtableCount * 2))
-                return;
-
-            for (var i = 0; i < subtableCount; i++)
-            {
-                var subtableOffset = lookupOffset + ReadUInt16(table, lookupOffset + 6 + i * 2);
-                ReadSingleSubstitutionSubtable(table, subtableOffset, sourceGlyphs, substitutions);
-            }
-        }
-
-        private static void ReadSingleSubstitutionSubtable(byte[] table, int subtableOffset,
-            Dictionary<int, bool> sourceGlyphs, Dictionary<int, int> substitutions)
-        {
-            if (!CanRead(table, subtableOffset, 6))
-                return;
-
-            var format = ReadUInt16(table, subtableOffset);
-            var coverageOffset = subtableOffset + ReadUInt16(table, subtableOffset + 2);
-            var coveredGlyphs = ReadCoverage(table, coverageOffset);
-
-            if (coveredGlyphs == null)
-                return;
-
-            if (format == 1)
-            {
-                var delta = ReadInt16(table, subtableOffset + 4);
-
-                foreach (var glyph in coveredGlyphs)
-                {
-                    if (sourceGlyphs.ContainsKey(glyph))
-                        substitutions[glyph] = (glyph + delta) & 0xffff;
-                }
-
-                return;
-            }
-
-            if (format != 2)
-                return;
-
-            var glyphCount = ReadUInt16(table, subtableOffset + 4);
-
-            if (coveredGlyphs.Count != glyphCount || !CanRead(table, subtableOffset + 6, glyphCount * 2))
-                return;
-
-            for (var i = 0; i < glyphCount; i++)
-            {
-                var glyph = coveredGlyphs[i];
-
-                if (sourceGlyphs.ContainsKey(glyph))
-                    substitutions[glyph] = ReadUInt16(table, subtableOffset + 6 + i * 2);
-            }
-        }
-
-        private static List<int> ReadCoverage(byte[] table, int offset)
-        {
-            if (!CanRead(table, offset, 4))
-                return null;
-
-            var format = ReadUInt16(table, offset);
-            var glyphs = new List<int>();
-
-            if (format == 1)
-            {
-                var glyphCount = ReadUInt16(table, offset + 2);
-
-                if (!CanRead(table, offset + 4, glyphCount * 2))
-                    return null;
-
-                for (var i = 0; i < glyphCount; i++)
-                    glyphs.Add(ReadUInt16(table, offset + 4 + i * 2));
-
-                return glyphs;
-            }
-
-            if (format != 2)
-                return null;
-
-            var rangeCount = ReadUInt16(table, offset + 2);
-
-            if (!CanRead(table, offset + 4, rangeCount * 6))
-                return null;
-
-            for (var i = 0; i < rangeCount; i++)
-            {
-                var rangeOffset = offset + 4 + i * 6;
-                var startGlyph = ReadUInt16(table, rangeOffset);
-                var endGlyph = ReadUInt16(table, rangeOffset + 2);
-                var startCoverageIndex = ReadUInt16(table, rangeOffset + 4);
-
-                for (var glyph = startGlyph; glyph <= endGlyph; glyph++)
-                {
-                    var coverageIndex = startCoverageIndex + glyph - startGlyph;
-
-                    while (glyphs.Count <= coverageIndex)
-                        glyphs.Add(0);
-
-                    glyphs[coverageIndex] = glyph;
-                }
-            }
-
-            return glyphs;
-        }
-
         private void LoadAndRenderGlyph(int glyphId, float fontSize)
         {
             LoadGlyph(glyphId, fontSize);
@@ -494,39 +269,6 @@ namespace Wobble.Graphics.Sprites.Text
             return (IntPtr)Math.Max(localMinimum, Math.Min(localMaximum, localValue));
         }
 
-        private static bool CanRead(byte[] data, int offset, int length)
-        {
-            return offset >= 0 && length >= 0 && offset <= data.Length - length;
-        }
-
-        private static ushort ReadUInt16(byte[] data, int offset)
-        {
-            return (ushort)((data[offset] << 8) | data[offset + 1]);
-        }
-
-        private static short ReadInt16(byte[] data, int offset)
-        {
-            return unchecked((short)ReadUInt16(data, offset));
-        }
-
-        private static uint ReadUInt32(byte[] data, int offset)
-        {
-            return (uint)((data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]);
-        }
-
-        private static string TagToString(uint tag)
-        {
-            var bytes = new[]
-            {
-                (byte)(tag >> 24),
-                (byte)(tag >> 16),
-                (byte)(tag >> 8),
-                (byte)tag
-            };
-
-            return Encoding.ASCII.GetString(bytes);
-        }
-
         private static void ThrowOnError(FT_Error error, string message)
         {
             if (error != FT_Error.FT_Err_Ok)
@@ -541,10 +283,6 @@ namespace Wobble.Graphics.Sprites.Text
 
         [DllImport("freetype", CallingConvention = CallingConvention.Cdecl)]
         private static extern void FT_Done_MM_Var(FT_LibraryRec_* library, FT_MM_Var_* variation);
-
-        [DllImport("freetype", CallingConvention = CallingConvention.Cdecl)]
-        private static extern FT_Error FT_Load_Sfnt_Table(FT_FaceRec_* face, uint tag, IntPtr offset, byte* buffer,
-            UIntPtr* length);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct FT_MM_Var_

@@ -133,7 +133,11 @@ namespace Wobble.Graphics.Sprites.Text
             Dictionary<string, WobbleFontFace> addedFonts)
         {
             _fontLoader = new FreeTypeFontLoader();
-            _fontSystem = new FontSystem(new FontSystemSettings { FontLoader = _fontLoader });
+            _fontSystem = new FontSystem(new FontSystemSettings
+            {
+                FontLoader = _fontLoader,
+                TextShaper = new HarfBuzzTextShaper(_fontLoader)
+            });
 
             AddFont(string.Empty, font.Data, font.Index, font.Weight, implicitFontSizeReduction,
                 font.EnableTabularNumbers);
