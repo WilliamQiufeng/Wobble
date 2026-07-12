@@ -10,6 +10,7 @@ namespace Wobble.Graphics.Sprites.Text
     {
         private static readonly Feature TabularFiguresFeature = Feature.Parse("tnum=1");
         private static readonly Tag WeightAxisTag = new Tag('w', 'g', 'h', 't');
+        private static readonly Tag HorizontalHeaderTableTag = new Tag('h', 'h', 'e', 'a');
 
         private readonly FreeTypeFontLoader _fontLoader;
         private readonly Dictionary<int, RegisteredFont> _fonts = new Dictionary<int, RegisteredFont>();
@@ -118,12 +119,12 @@ namespace Wobble.Graphics.Sprites.Text
                     shapedGlyphs.Add(new ShapedGlyph
                     {
                         GlyphId = (int)info.Codepoint,
-                        Cluster = (int)info.Cluster,
+                        Cluster = start + (int)info.Cluster,
                         FontSourceId = fontSourceId,
                         XAdvance = position.XAdvance * scale,
                         YAdvance = position.YAdvance * scale,
                         XOffset = position.XOffset * scale,
-                        YOffset = position.YOffset * scale
+                        YOffset = -position.YOffset * scale
                     });
                 }
             }
@@ -158,7 +159,8 @@ namespace Wobble.Graphics.Sprites.Text
                 _blob = new Blob(_dataHandle.AddrOfPinnedObject(), data.Length, MemoryMode.ReadOnly);
                 _face = new Face(_blob, settings.Index);
                 Font = new Font(_face);
-                Font.SetScale(_face.UnitsPerEm, _face.UnitsPerEm);
+                var scale = GetFontScale(_face);
+                Font.SetScale(scale, scale);
                 SetVariations(settings);
                 Features = settings.EnableTabularNumbers
                     ? new[] { TabularFiguresFeature }
@@ -191,6 +193,30 @@ namespace Wobble.Graphics.Sprites.Text
                         Value = weight
                     }
                 });
+            }
+
+            private static int GetFontScale(Face face)
+            {
+                using (var table = face.ReferenceTable(HorizontalHeaderTableTag))
+                {
+                    if (table.Length >= 8)
+                    {
+                        var data = table.AsSpan();
+                        var ascender = ReadInt16(data, 4);
+                        var descender = ReadInt16(data, 6);
+                        var height = ascender - descender;
+
+                        if (height > 0)
+                            return height;
+                    }
+                }
+
+                return face.UnitsPerEm;
+            }
+
+            private static short ReadInt16(Span<byte> data, int offset)
+            {
+                return unchecked((short)((data[offset] << 8) | data[offset + 1]));
             }
         }
     }
