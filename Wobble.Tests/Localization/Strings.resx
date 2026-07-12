@@ -6,6 +6,9 @@
   <data name="Screen_HorizontalClipping" xml:space="preserve">
     <value>Horizontal Clipping</value>
   </data>
+  <data name="Screen_RenderTarget" xml:space="preserve">
+    <value>Render Target</value>
+  </data>
   <data name="Screen_MarqueeSpriteText" xml:space="preserve">
     <value>Marquee SpriteText</value>
   </data>
@@ -45,11 +48,26 @@
   <data name="Screen_ButtonPerformance" xml:space="preserve">
     <value>Button Performance</value>
   </data>
+  <data name="Screen_ButtonsGallery" xml:space="preserve">
+    <value>Buttons Gallery</value>
+  </data>
+  <data name="Screen_CursorScaling" xml:space="preserve">
+    <value>Cursor Scaling</value>
+  </data>
   <data name="Screen_NavigationBar" xml:space="preserve">
     <value>Navigation Bar</value>
   </data>
+  <data name="Screen_PersistentElements" xml:space="preserve">
+    <value>Persistent Elements</value>
+  </data>
+  <data name="Screen_ScreenLifecycle" xml:space="preserve">
+    <value>Screen Lifecycle</value>
+  </data>
   <data name="Screen_Discord" xml:space="preserve">
     <value>Discord Rich Pr.</value>
+  </data>
+  <data name="Screen_DialogInput" xml:space="preserve">
+    <value>Dialog Input</value>
   </data>
   <data name="Screen_DrawableScaling" xml:space="preserve">
     <value>Drawable Scaling</value>
@@ -96,6 +114,9 @@
   <data name="Screen_TextInput" xml:space="preserve">
     <value>Text Input</value>
   </data>
+  <data name="Screen_FormControls" xml:space="preserve">
+    <value>Form Controls Gallery</value>
+  </data>
   <data name="Screen_TextSizes" xml:space="preserve">
     <value>Text Sizes</value>
   </data>
@@ -104,5 +125,26 @@
   </data>
   <data name="Selection_Title" xml:space="preserve">
     <value>Wobble Tests</value>
+  </data>
+  <data name="Selection_WelcomeHelp" xml:space="preserve">
+    <value>Choose a category from the navigation bar to open a test screen.</value>
+  </data>
+  <data name="Category_Rendering" xml:space="preserve">
+    <value>Rendering</value>
+  </data>
+  <data name="Category_LayoutMotion" xml:space="preserve">
+    <value>Layout &amp; Motion</value>
+  </data>
+  <data name="Category_TextControls" xml:space="preserve">
+    <value>Text &amp; Controls</value>
+  </data>
+  <data name="Category_InputIntegration" xml:space="preserve">
+    <value>Input &amp; Integration</value>
+  </data>
+  <data name="Category_RuntimeFramework" xml:space="preserve">
+    <value>Runtime &amp; Framework</value>
+  </data>
+  <data name="Navigation_BackToTests" xml:space="preserve">
+    <value>Back to Wobble Tests</value>
   </data>
 </root>
